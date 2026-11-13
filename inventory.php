@@ -10,8 +10,12 @@ $input = json_decode(file_get_contents('php://input'), true) ?? [];
 
 // CSRF Validation for state-changing requests
 if (in_array($method, ['POST', 'PUT', 'PATCH', 'DELETE'], true)) {
-    $headers = array_change_key_case(getallheaders(), CASE_LOWER);
-    $sent_token = $headers['x-csrf-token'] ?? $input['csrf_token'] ?? '';
+    $headers = function_exists('getallheaders') ? array_change_key_case(getallheaders(), CASE_LOWER) : [];
+    $sent_token = $headers['x-csrf-token'] 
+               ?? $_SERVER['HTTP_X_CSRF_TOKEN'] 
+               ?? $_SERVER['REDIRECT_HTTP_X_CSRF_TOKEN'] 
+               ?? $input['csrf_token'] 
+               ?? '';
     
     if (empty($_SESSION['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $sent_token)) {
         http_response_code(403);
