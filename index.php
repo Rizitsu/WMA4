@@ -59,12 +59,12 @@ session_start();
 
         <h3>Sales Report</h3>
         <ul>
-            <li>Completed Rentals <span id="dash-completed-rentals">0</span></li>
-            <li>Base Rental Revenue <span>₱<span id="dash-base-revenue">0.00</span></span></li>
-            <li>Late Fees Collected <span>₱<span id="dash-late-collected">0.00</span></span></li>
-            <li>Total Revenue <span>₱<span id="dash-total-revenue">0.00</span></span></li>
-            <li>Average Sale Value <span>₱<span id="dash-avg-sale">0.00</span></span></li>
-            <li>Most Rented Item <span id="dash-top-item">—</span></li>
+            <li>Completed Rentals<span id="dash-completed-rentals">0</span></li>
+            <li>Base Rental Revenue<span>₱<span id="dash-base-revenue">0.00</span></span></li>
+            <li>Late Fees Collected<span>₱<span id="dash-late-collected">0.00</span></span></li>
+            <li>Total Revenue<span>₱<span id="dash-total-revenue">0.00</span></span></li>
+            <li>Average Sale Value<span>₱<span id="dash-avg-sale">0.00</span></span></li>
+            <li>Most Rented Item<span id="dash-top-item">—</span></li>
         </ul>
 
         <button>Refresh Dashboard</button>
@@ -106,7 +106,7 @@ session_start();
                 </tr>
             </thead>
             <tbody id="customers-tbody">
-            </tbody>
+                </tbody>
         </table>
     </section>
 
@@ -130,7 +130,7 @@ session_start();
             <select id="item_status">
                 <option value="Available">Available</option>
                 <option value="Maintenance">Maintenance</option>
-            </select><br><br>
+                </select><br><br>
             
             <button type="submit">Save Item</button>
         </form>
@@ -150,7 +150,7 @@ session_start();
                 </tr>
             </thead>
             <tbody id="inventory-tbody">
-            </tbody>
+                </tbody>
         </table>
     </section>
 
@@ -174,7 +174,7 @@ session_start();
 
             <label>Select Items to Rent (Hold CTRL/CMD to select multiple):</label><br>
             <select id="rental_inventory_ids" multiple required size="5">
-            </select><br><br>
+                </select><br><br>
 
             <button type="submit">Process Rental Checkout</button>
         </form>
@@ -189,7 +189,7 @@ session_start();
             <option value="Overdue">Overdue Only</option>
             <option value="Returned">Past Returns</option>
         </select>
-        <button onclick="load_rentals()">Filter</button>
+        <button>Filter</button>
 
         <table border="1">
             <thead>
@@ -203,7 +203,7 @@ session_start();
                 </tr>
             </thead>
             <tbody id="contracts-tbody">
-            </tbody>
+                </tbody>
         </table>
 
         <hr>
@@ -214,7 +214,8 @@ session_start();
                 <input type="hidden" id="return_contract_id">
                 
                 <p>Check the items being returned right now:</p>
-                <div id="return-checkboxes-container"></div>
+                <div id="return-checkboxes-container">
+                    </div>
                 <br>
                 <button type="submit">Complete Return & Calculate Late Fees</button>
             </form>
@@ -324,3 +325,306 @@ session_start();
                 showSection('login-section');
             }
         });
+    }
+
+    // 1. dashboard
+    function load_dashboard() {
+        fetch('dashboard.php')
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    const s = data.summary;
+                    document.getElementById('dash-total-items').innerText = s.inventory.total_items;
+                    document.getElementById('dash-available').innerText = s.inventory.available;
+                    document.getElementById('dash-rented').innerText = s.inventory.rented;
+                    
+                    document.getElementById('dash-active').innerText = s.contracts.active_on_time;
+                    document.getElementById('dash-overdue').innerText = s.contracts.overdue;
+                    
+                    document.getElementById('dash-deposits').innerText = s.financial.deposits_held.toFixed(2);
+                    document.getElementById('dash-late-fees').innerText = s.financial.late_fee_exposure.toFixed(2);
+
+                    document.getElementById('dash-completed-rentals').innerText = s.sales.completed_rentals;
+                    document.getElementById('dash-base-revenue').innerText = s.sales.base_rental_revenue.toFixed(2);
+                    document.getElementById('dash-late-collected').innerText = s.sales.late_fees_collected.toFixed(2);
+                    document.getElementById('dash-total-revenue').innerText = s.sales.total_revenue.toFixed(2);
+                    document.getElementById('dash-avg-sale').innerText = s.sales.average_sale_value.toFixed(2);
+                    document.getElementById('dash-top-item').innerText = s.sales.top_item
+                        ? s.sales.top_item + ' (' + s.sales.top_item_rentals + 'x)'
+                        : '—';
+                }
+            });
+    }
+
+    document.querySelector('#dashboard-section button').addEventListener('click', load_dashboard);
+
+
+    // 2. customer
+    function search_customers() {
+        const term = document.getElementById('customer-search').value;
+        fetch('customers.php?search=' + encodeURIComponent(term))
+            .then(res => res.json())
+            .then(data => {
+                const tbody = document.getElementById('customers-tbody');
+                tbody.innerHTML = '';
+                if (data.success && data.results) {
+                    data.results.forEach((c, index) => {
+                        let row_num = index + 1;
+                        let actionBtns = current_role === 'Admin' 
+                            ? `<button onclick="edit_customer(${c.id})">Edit</button> <button onclick="delete_customer(${c.id})">Delete</button>`
+                            : `<button onclick="edit_customer(${c.id})">Edit</button>`;
+
+                        tbody.innerHTML += `<tr>
+                            <td>${row_num}</td>
+                            <td>${c.name}</td>
+                            <td>${c.id_number}</td>
+                            <td>${c.phone}</td>
+                            <td>${actionBtns}</td>
+                        </tr>`;
+                    });
+                }
+            });
+    }
+
+    function delete_customer(id) {
+        if (!confirm('Delete this customer? This cannot be undone.')) return;
+        fetch('customers.php?id=' + id, { 
+            method: 'DELETE',
+            headers: { 'X-CSRF-Token': csrf_token }
+        })
+        .then(res => res.json())
+        .then(data => { data.success ? search_customers() : alert(data.error || 'Delete failed.'); });
+    }
+    
+    function delete_inventory(id) {
+        if (!confirm('Delete this inventory item? This cannot be undone.')) return;
+        fetch('inventory.php?id=' + id, { 
+            method: 'DELETE',
+            headers: { 'X-CSRF-Token': csrf_token }
+        })
+        .then(res => res.json())
+        .then(data => { data.success ? load_inventory() : alert(data.error || 'Delete failed.'); });
+    }
+
+   //2b. inventory
+    function load_inventory() {
+        fetch('inventory.php')
+            .then(res => res.json())
+            .then(data => {
+                const tbody = document.getElementById('inventory-tbody');
+                tbody.innerHTML = '';
+                if (data.success && data.results) {
+                    data.results.forEach((i, index) => {
+                        let row_num = index + 1; 
+                        let actionBtns = current_role === 'Admin' 
+                            ? `<button onclick="edit_inventory(${i.id})">Edit</button> <button onclick="delete_inventory(${i.id})">Delete</button>`
+                            : `<button onclick="edit_inventory(${i.id})">Edit</button>`;
+
+                        tbody.innerHTML += `<tr>
+                            <td>${row_num}</td>
+                            <td>${i.item_name}</td>
+                            <td>${i.serial_number}</td>
+                            <td>₱${i.daily_rate}</td>
+                            <td>${i.status}</td>
+                            <td>${actionBtns}</td>
+                        </tr>`;
+                    });
+                }
+            });
+    }
+
+    document.getElementById('customer-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const id = document.getElementById('customer_id').value;
+        const payload = {
+            name: document.getElementById('customer_name').value,
+            id_number: document.getElementById('customer_id_number').value,
+            phone: document.getElementById('customer_phone').value
+        };
+        const method = id ? 'PUT' : 'POST';
+        const url = id ? 'customers.php?id=' + id : 'customers.php';
+
+        fetch(url, { 
+            method: method, 
+            headers: { 
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': csrf_token 
+            }, 
+            body: JSON.stringify(payload) 
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                alert(id ? 'Updated!' : 'Created!');
+                document.getElementById('customer-form').reset();
+                document.getElementById('customer_id').value = '';
+                search_customers();
+            } else alert('Error: ' + data.error);
+        });
+    });
+
+
+    // 3. inventory magics
+    function load_rentals() {
+        const status = document.getElementById('contract-filter').value;
+        fetch('active_rentals.php?status=' + status)
+            .then(res => res.json())
+            .then(data => {
+                const tbody = document.getElementById('contracts-tbody');
+                tbody.innerHTML = '';
+                if (data.success && data.results) {
+                    data.results.forEach((c, index) => {
+                        let row_num = index + 1;
+                        let actionBtn = c.status !== 'Returned' 
+                            ? `<button onclick="process_full_return(${c.id})">Return All Items</button>` 
+                            : 'Closed';
+                        
+                        tbody.innerHTML += `<tr>
+                            <td>${row_num}</td>
+                            <td>${c.customer_name}</td>
+                            <td>${c.checkout_date}</td>
+                            <td>${c.due_date}</td>
+                            <td>${c.status}</td>
+                            <td>${actionBtn}</td>
+                        </tr>`;
+                    });
+                }
+            });
+    }
+
+    function edit_inventory(id) {
+        fetch('inventory.php?id=' + id).then(res => res.json()).then(data => {
+            if (data.success) {
+                document.getElementById('inventory_id').value = data.item.id;
+                document.getElementById('item_name').value = data.item.item_name;
+                document.getElementById('serial_number').value = data.item.serial_number;
+                document.getElementById('daily_rate').value = data.item.daily_rate;
+                document.getElementById('item_status').value = data.item.status;
+                window.scrollTo(0, 0);
+            }
+        });
+    }
+
+    document.getElementById('inventory-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const id = document.getElementById('inventory_id').value;
+        const payload = {
+            item_name: document.getElementById('item_name').value,
+            serial_number: document.getElementById('serial_number').value,
+            daily_rate: document.getElementById('daily_rate').value,
+            status: document.getElementById('item_status').value
+        };
+        const method = id ? 'PUT' : 'POST';
+        const url = id ? 'inventory.php?id=' + id : 'inventory.php';
+
+        fetch(url, { 
+            method: method, 
+            headers: { 
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': csrf_token 
+            }, 
+            body: JSON.stringify(payload) 
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                alert(id ? 'Item Updated!' : 'Item Saved!');
+                document.getElementById('inventory-form').reset();
+                document.getElementById('inventory_id').value = '';
+                load_inventory();
+            } else alert('Error: ' + data.error);
+        });
+    });
+
+
+    // 4. new rentals
+    function load_rental_dropdowns() {
+        fetch('customers.php').then(res => res.json()).then(data => {
+            const sel = document.getElementById('rental_customer_id');
+            sel.innerHTML = '<option value="">-- Choose Customer --</option>';
+            if (data.success && data.results) {
+                data.results.forEach(c => sel.innerHTML += `<option value="${c.id}">${c.name}</option>`);
+            }
+        });
+
+        fetch('inventory.php?status=Available').then(res => res.json()).then(data => {
+            const sel = document.getElementById('rental_inventory_ids');
+            sel.innerHTML = '';
+            if (data.success && data.results) {
+                data.results.forEach(i => sel.innerHTML += `<option value="${i.id}">${i.item_name} (₱${i.daily_rate}/day)</option>`);
+            }
+        });
+    }
+
+    document.getElementById('new-rental-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const selectedOptions = Array.from(document.getElementById('rental_inventory_ids').selectedOptions);
+        
+        const payload = {
+            customer_id: document.getElementById('rental_customer_id').value,
+            checkout_date: document.getElementById('rental_checkout_date').value,
+            due_date: document.getElementById('rental_due_date').value,
+            deposit_amount: document.getElementById('rental_deposit').value,
+            inventory_ids: selectedOptions.map(opt => opt.value)
+        };
+
+        fetch('process_new_rental.php', { 
+            method: 'POST', 
+            headers: { 
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': csrf_token 
+            }, 
+            body: JSON.stringify(payload) 
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                alert('Rental created! Contract ID: ' + data.contract_id);
+                document.getElementById('new-rental-form').reset();
+                load_rental_dropdowns();
+            } else alert('Error: ' + data.error);
+        });
+    });
+
+    // 5. active rentals
+    document.querySelector('#rentals-section button').addEventListener('click', load_rentals);
+
+    function process_full_return(contract_id) {
+        if (confirm('Are you sure you want to process a full return for Contract #' + contract_id + '?')) {
+            fetch('process_return.php', { 
+                method: 'POST', 
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': csrf_token 
+                }, 
+                body: JSON.stringify({ contract_id: contract_id }) 
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Items returned! Late fee applied: ₱' + data.late_fee);
+                    load_rentals();
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            });
+        }
+    }
+
+    function edit_customer(id) {
+        fetch('customers.php?id=' + id).then(res => res.json()).then(data => {
+            if (data.success) {
+                document.getElementById('customer_id').value = data.customer.id;
+                document.getElementById('customer_name').value = data.customer.name;
+                document.getElementById('customer_id_number').value = data.customer.id_number;
+                document.getElementById('customer_phone').value = data.customer.phone;
+                window.scrollTo(0, 0);
+            }
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', () => showSection('login-section'));
+</script>
+
+</body>
+</html>
