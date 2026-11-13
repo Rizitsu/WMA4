@@ -7,11 +7,13 @@ final class Database
 
     private const CHARSET = 'utf8mb4';
 
+    // Prevent direct instantiation
     private function __construct() {}
 
     public static function connection(): PDO
     {
         if (self::$instance === null) {
+            // If missing, it defaults to your local XAMPP settings.
             $host = getenv('DB_HOST') ?: 'localhost';
             $port = getenv('DB_PORT') ?: '3306';
             $db   = getenv('DB_NAME') ?: 'rental_system';
@@ -36,7 +38,18 @@ final class Database
                 $options[PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT] = false;
             }
 
-            self::$instance = new PDO($dsn, $user, $pass, $options);
+            try {
+                self::$instance = new PDO($dsn, $user, $pass, $options);
+            } catch (\PDOException $e) {
+                // If connection fails, return a error
+                http_response_code(500);
+                header('Content-Type: application/json');
+                echo json_encode([
+                    'success' => false, 
+                    'error' => 'Database connection failed. Please check your credentials.'
+                ]);
+                exit;
+            }
         }
 
         return self::$instance;
