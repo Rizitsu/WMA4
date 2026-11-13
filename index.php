@@ -275,6 +275,43 @@ session_start();
         });
     });
 
+    document.getElementById('return-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const contractId = document.getElementById('return_contract_id').value;
+        if (!contractId) {
+            alert('Please select a contract first.');
+            return;
+        }
+
+        const payload = {
+            contract_id: contractId
+        };
+
+        fetch('process_return.php', { 
+            method: 'POST', 
+            headers: { 
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': csrf_token 
+            }, 
+            body: JSON.stringify(payload) 
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                alert('Items returned successfully! Late fee applied: ₱' + (data.late_fee || 0));
+                document.getElementById('return-form').reset();
+                document.getElementById('return_contract_label').innerText = '';
+                load_rentals();
+            } else {
+                alert('Error: ' + (data.error || 'Failed to process return.'));
+            }
+        })
+        .catch(err => {
+            alert('Network or server error occurred.');
+        });
+    });
+
     // 0b. Global Logout function
     function logoutUser() {
         fetch('logout.php')
