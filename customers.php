@@ -16,6 +16,23 @@ try {
     $db = Database::connection();
     $customerModel = new Customer($db);
     $method = $_SERVER['REQUEST_METHOD'];
+    $input = json_decode(file_get_contents('php://input'), true) ?? [];
+
+    // CSRF Validation for state-changing requests
+    if (in_array($method, ['POST', 'PUT', 'PATCH', 'DELETE'], true)) {
+        $headers = function_exists('getallheaders') ? array_change_key_case(getallheaders(), CASE_LOWER) : [];
+        $sent_token = $headers['x-csrf-token'] 
+                   ?? $_SERVER['HTTP_X_CSRF_TOKEN'] 
+                   ?? $_SERVER['REDIRECT_HTTP_X_CSRF_TOKEN'] 
+                   ?? $input['csrf_token'] 
+                   ?? '';
+        
+        if (empty($_SESSION['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $sent_token)) {
+            http_response_code(403);
+            echo json_encode(['success' => false, 'error' => 'Invalid or missing CSRF token. Access denied.']);
+            exit;
+        }
+    }
 
     switch ($method) {
         case 'GET':
@@ -30,7 +47,6 @@ try {
             break;
 
         case 'POST':
-            $input = json_decode(file_get_contents('php://input'), true) ?? $_POST;
             $id = $customerModel->create([
                 'name' => $input['name'] ?? '',
                 'id_number' => $input['id_number'] ?? '',
@@ -41,7 +57,6 @@ try {
 
         case 'PUT':
             $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
-            $input = json_decode(file_get_contents('php://input'), true) ?? [];
             $success = $customerModel->update($id, $input);
             echo json_encode(['success' => $success]);
             break;
