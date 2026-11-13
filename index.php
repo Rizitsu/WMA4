@@ -1,6 +1,9 @@
 <?php
 declare(strict_types=1);
 session_start();
+ini_set('display_errors', '1');
+ini_set('display_startup_errors', '1');
+error_reporting(E_ALL);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -21,7 +24,7 @@ session_start();
     </nav>
     <hr>
 
-    <section id="login-section" style="display: none;">
+    <section id="login-section" style="display: block;">
         <h1>System Login</h1>
         <form id="login-form">
             <label>Username:</label><br>
@@ -59,12 +62,12 @@ session_start();
 
         <h3>Sales Report</h3>
         <ul>
-            <li>Completed Rentals<span id="dash-completed-rentals">0</span></li>
-            <li>Base Rental Revenue<span>₱<span id="dash-base-revenue">0.00</span></span></li>
-            <li>Late Fees Collected<span>₱<span id="dash-late-collected">0.00</span></span></li>
-            <li>Total Revenue<span>₱<span id="dash-total-revenue">0.00</span></span></li>
-            <li>Average Sale Value<span>₱<span id="dash-avg-sale">0.00</span></span></li>
-            <li>Most Rented Item<span id="dash-top-item">—</span></li>
+            <li>Completed Rentals <span id="dash-completed-rentals">0</span></li>
+            <li>Base Rental Revenue <span>₱<span id="dash-base-revenue">0.00</span></span></li>
+            <li>Late Fees Collected <span>₱<span id="dash-late-collected">0.00</span></span></li>
+            <li>Total Revenue <span>₱<span id="dash-total-revenue">0.00</span></span></li>
+            <li>Average Sale Value <span>₱<span id="dash-avg-sale">0.00</span></span></li>
+            <li>Most Rented Item <span id="dash-top-item">—</span></li>
         </ul>
 
         <button>Refresh Dashboard</button>
@@ -106,7 +109,7 @@ session_start();
                 </tr>
             </thead>
             <tbody id="customers-tbody">
-                </tbody>
+            </tbody>
         </table>
     </section>
 
@@ -130,7 +133,7 @@ session_start();
             <select id="item_status">
                 <option value="Available">Available</option>
                 <option value="Maintenance">Maintenance</option>
-                </select><br><br>
+            </select><br><br>
             
             <button type="submit">Save Item</button>
         </form>
@@ -150,7 +153,7 @@ session_start();
                 </tr>
             </thead>
             <tbody id="inventory-tbody">
-                </tbody>
+            </tbody>
         </table>
     </section>
 
@@ -174,7 +177,7 @@ session_start();
 
             <label>Select Items to Rent (Hold CTRL/CMD to select multiple):</label><br>
             <select id="rental_inventory_ids" multiple required size="5">
-                </select><br><br>
+            </select><br><br>
 
             <button type="submit">Process Rental Checkout</button>
         </form>
@@ -189,7 +192,7 @@ session_start();
             <option value="Overdue">Overdue Only</option>
             <option value="Returned">Past Returns</option>
         </select>
-        <button>Filter</button>
+        <button onclick="load_rentals()">Filter</button>
 
         <table border="1">
             <thead>
@@ -203,7 +206,7 @@ session_start();
                 </tr>
             </thead>
             <tbody id="contracts-tbody">
-                </tbody>
+            </tbody>
         </table>
 
         <hr>
@@ -214,8 +217,7 @@ session_start();
                 <input type="hidden" id="return_contract_id">
                 
                 <p>Check the items being returned right now:</p>
-                <div id="return-checkboxes-container">
-                    </div>
+                <div id="return-checkboxes-container"></div>
                 <br>
                 <button type="submit">Complete Return & Calculate Late Fees</button>
             </form>
@@ -275,6 +277,7 @@ session_start();
         });
     });
 
+    // Return Form Submission Handler
     document.getElementById('return-form').addEventListener('submit', function(e) {
         e.preventDefault();
         
@@ -327,7 +330,7 @@ session_start();
         });
     }
 
-    // 1. dashboard
+    // 1. Dashboard
     function load_dashboard() {
         fetch('dashboard.php')
             .then(res => res.json())
@@ -358,8 +361,7 @@ session_start();
 
     document.querySelector('#dashboard-section button').addEventListener('click', load_dashboard);
 
-
-    // 2. customer
+    // 2. Customers
     function search_customers() {
         const term = document.getElementById('customer-search').value;
         fetch('customers.php?search=' + encodeURIComponent(term))
@@ -406,7 +408,7 @@ session_start();
         .then(data => { data.success ? load_inventory() : alert(data.error || 'Delete failed.'); });
     }
 
-   //2b. inventory
+    // 2b. Inventory
     function load_inventory() {
         fetch('inventory.php')
             .then(res => res.json())
@@ -453,21 +455,3 @@ session_start();
             body: JSON.stringify(payload) 
         })
         .then(res => res.json())
-        .then(data => {
-            if (data.success) {
-                alert(id ? 'Updated!' : 'Created!');
-                document.getElementById('customer-form').reset();
-                document.getElementById('customer_id').value = '';
-                search_customers();
-            } else alert('Error: ' + data.error);
-        });
-    });
-
-
-    // 3. inventory magics
-    function load_rentals() {
-        const status = document.getElementById('contract-filter').value;
-        fetch('active_rentals.php?status=' + status)
-            .then(res => res.json())
-            .then(data => {
-                const tbody = document.getElementById('contracts-tbody
