@@ -1,71 +1,92 @@
 <?php
 declare(strict_types=1);
-session_start();
-header('Content-Type: application/json');
 
-try {
-    require_once __DIR__ . '/Database.php';
-    require_once __DIR__ . '/Customer.php';
+require_once __DIR__ . '/BaseModel.php';
+require_once __DIR__ . '/ValidationException.php';
 
-    if (!isset($_SESSION['user_id'])) {
-        http_response_code(401);
-        echo json_encode(['success' => false, 'error' => 'Unauthorized']);
-        exit;
+class Customer extends BaseModel
+{
+    protected string $table = 'customers';
+
+    public function create(array $data): int
+    {
+        $this->validate_data($data);
+
+        $stmt = $this->db->prepare(
+            'INSERT INTO customers (name, id_number, phone) VALUES (:name, :id_number, :phone)'
+        );
+        $stmt->execute([
+            'name'      => trim($data['name']),
+            'id_number' => trim($data['id_number']),
+            'phone'     => trim($data['phone']),
+        ]);
+
+        return (int) $this->db->lastInsertId();
     }
 
-    $db = Database::connection();
-    $customerModel = new Customer($db);
-    $method = $_SERVER['REQUEST_METHOD'];
+    public function read(int $id): ?array
+    {
+        $stmt = $this->db->prepare('SELECT * FROM customers WHERE id = :id');
+        $stmt->execute(['id' => $id]);
+        $row = $stmt->fetch();
 
-    // Optional CSRF check during testing (bypasses if empty to prevent blockages)
-    if (in_array($method, ['POST', 'PUT', 'DELETE'])) {
-        $token = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? $_POST['csrf_token'] ?? '';
-        if (!empty($_SESSION['csrf_token']) && !empty($token) && !hash_equals($_SESSION['csrf_token'], $token)) {
-            // Soft warning or allow for testing
+        return $row ?: null;
+    }
+
+    public function update(int $id, array $data): bool
+    {
+        if (empty($data)) {
+            return false;
+        }
+
+        $fields = [];
+        $params = ['id' => $id];
+
+        foreach (['name', 'id_number', 'phone'] as $field) {
+            if (array_key_exists($field, $data)) {
+                $fields[]       = "$field = :$field";
+                $params[$field] = trim((string) $data[$field]);
+            }
+        }
+
+        if (empty($fields)) {
+            return false;
+        }
+
+        $sql  = 'UPDATE customers SET ' . implode(', ', $fields) . ' WHERE id = :id';
+        $stmt = $this->db->prepare($sql);
+        
+        return $stmt->execute($params);
+    }
+
+    public function all(array $filters = []): array
+    {
+        $sql    = 'SELECT * FROM customers';
+        $params = [];
+
+        if (!empty($filters['search'])) {
+            $sql .= ' WHERE name LIKE :search1 OR phone LIKE :search2 OR id_number LIKE :search3';
+            $term = '%' . $filters['search'] . '%';
+            $params['search1'] = $term;
+            $params['search2'] = $term;
+            $params['search3'] = $term;
+        }
+
+        $sort_and_limit = $this->build_sort_and_limit($filters, ['name', 'id_number', 'created_at'], 'name');
+        $sql            .= $sort_and_limit['sql'];
+
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+
+        return $stmt->fetchAll();
+    }
+
+    private function validate_data(array $data): void
+    {
+        foreach (['name', 'id_number', 'phone'] as $field) {
+            if (empty(trim((string) ($data[$field] ?? '')))) {
+                throw new ValidationException("Field '$field' is required.");
+            }
         }
     }
-
-    switch ($method) {
-        case 'GET':
-            if (isset($_GET['id'])) {
-                $customer = $customerModel->read((int)$_GET['id']);
-                echo json_encode(['success' => true, 'customer' => $customer]);
-            } else {
-                $search = $_GET['search'] ?? '';
-                $results = $customerModel->all(['search' => $search]);
-                echo json_encode(['success' => true, 'results' => $results]);
-            }
-            break;
-
-        case 'POST':
-            $input = json_decode(file_get_contents('php://input'), true) ?? $_POST;
-            $id = $customerModel->create([
-                'name' => $input['name'] ?? '',
-                'id_number' => $input['id_number'] ?? '',
-                'phone' => $input['phone'] ?? ''
-            ]);
-            echo json_encode(['success' => true, 'id' => $id]);
-            break;
-
-        case 'PUT':
-            $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
-            $input = json_decode(file_get_contents('php://input'), true) ?? [];
-            $success = $customerModel->update($id, $input);
-            echo json_encode(['success' => $success]);
-            break;
-
-        case 'DELETE':
-            $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
-            $stmt = $db->prepare('DELETE FROM customers WHERE id = ?');
-            $success = $stmt->execute([$id]);
-            echo json_encode(['success' => $success]);
-            break;
-
-        default:
-            http_response_code(405);
-            echo json_encode(['success' => false, 'error' => 'Method not allowed']);
-    }
-} catch (\Throwable $e) {
-    http_response_code(500);
-    echo json_encode(['success' => false, 'error' => $e->getMessage()]);
 }
