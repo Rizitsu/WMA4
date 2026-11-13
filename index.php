@@ -239,55 +239,59 @@ error_reporting(E_ALL);
         if (sectionId === 'rentals-section') load_rentals();
     }
 
-// 0. Login handling with error catching
-    document.getElementById('login-form').addEventListener('submit', function(e) {
-        e.preventDefault();
-        
-        const payload = {
-            username: document.getElementById('login_username').value,
-            password: document.getElementById('login_password').value
-        };
+// 0. Safe Login Handling
+    document.addEventListener('DOMContentLoaded', () => {
+        const loginForm = document.getElementById('login-form');
+        if (loginForm) {
+            loginForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const payload = {
+                    username: document.getElementById('login_username').value,
+                    password: document.getElementById('login_password').value
+                };
 
-        fetch('login.php', { 
-            method: 'POST', 
-            headers: { 'Content-Type': 'application/json' }, 
-            body: JSON.stringify(payload) 
-        })
-        .then(res => res.text()) // Get raw text first to inspect
-        .then(text => {
-            try {
-                const data = JSON.parse(text);
-                if (data.success) {
-                    csrf_token = data.csrf_token;
-                    current_role = data.user.role;
-                    
-                    document.getElementById('main-nav').style.display = 'flex';
-                    document.getElementById('login-error').style.display = 'none';
+                fetch('login.php', { 
+                    method: 'POST', 
+                    headers: { 'Content-Type': 'application/json' }, 
+                    body: JSON.stringify(payload) 
+                })
+                .then(res => res.text())
+                .then(text => {
+                    try {
+                        const data = JSON.parse(text);
+                        if (data.success) {
+                            csrf_token = data.csrf_token;
+                            current_role = data.user.role;
+                            
+                            document.getElementById('main-nav').style.display = 'flex';
+                            document.getElementById('login-error').style.display = 'none';
 
-                    if (current_role === 'Staff') {
-                        document.getElementById('nav-dash').style.display = 'none';
-                        showSection('rentals-section');
-                    } else {
-                        document.getElementById('nav-dash').style.display = 'inline-block';
-                        showSection('dashboard-section');
+                            if (current_role === 'Staff') {
+                                document.getElementById('nav-dash').style.display = 'none';
+                                showSection('rentals-section');
+                            } else {
+                                document.getElementById('nav-dash').style.display = 'inline-block';
+                                showSection('dashboard-section');
+                            }
+                        } else {
+                            const err = document.getElementById('login-error');
+                            err.innerText = data.error || 'Invalid credentials.';
+                            err.style.display = 'block';
+                        }
+                    } catch (err) {
+                        const errorBox = document.getElementById('login-error');
+                        errorBox.innerHTML = 'Server error or PHP output: <br><pre style="text-align:left; font-size:11px;">' + text + '</pre>';
+                        errorBox.style.display = 'block';
                     }
-                } else {
+                })
+                .catch(fetchErr => {
                     const err = document.getElementById('login-error');
-                    err.innerText = data.error || 'Invalid credentials.';
+                    err.innerText = 'Network error occurred.';
                     err.style.display = 'block';
-                }
-            } catch (err) {
-                // If it's not valid JSON, show the raw PHP error on the screen!
-                const errorBox = document.getElementById('login-error');
-                errorBox.innerHTML = 'Server Error / Invalid JSON response: <br><pre style="text-align:left; font-size:11px;">' + text + '</pre>';
-                errorBox.style.display = 'block';
-            }
-        })
-        .catch(fetchErr => {
-            const err = document.getElementById('login-error');
-            err.innerText = 'Network error occurred.';
-            err.style.display = 'block';
-        });
+                });
+            });
+        }
     });
     // Return Form Submission Handler
     document.getElementById('return-form').addEventListener('submit', function(e) {
