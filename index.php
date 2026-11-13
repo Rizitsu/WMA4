@@ -1,9 +1,6 @@
 <?php
 declare(strict_types=1);
 session_start();
-ini_set('display_errors', '1');
-ini_set('display_startup_errors', '1');
-error_reporting(E_ALL);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -24,7 +21,7 @@ error_reporting(E_ALL);
     </nav>
     <hr>
 
-    <section id="login-section" style="display: block;">
+    <section id="login-section" style="display: none;">
         <h1>System Login</h1>
         <form id="login-form">
             <label>Username:</label><br>
@@ -239,67 +236,50 @@ error_reporting(E_ALL);
         if (sectionId === 'rentals-section') load_rentals();
     }
 
-// 0. Safe Login Handling
-    document.addEventListener('DOMContentLoaded', () => {
-        const loginForm = document.getElementById('login-form');
-        if (loginForm) {
-            loginForm.addEventListener('submit', function(e) {
-                e.preventDefault();
+    // 0. Login handling
+    document.getElementById('login-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const payload = {
+            username: document.getElementById('login_username').value,
+            password: document.getElementById('login_password').value
+        };
+
+        fetch('login.php', { 
+            method: 'POST', 
+            headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify(payload) 
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                csrf_token = data.csrf_token;
+                current_role = data.user.role;
                 
-                const payload = {
-                    username: document.getElementById('login_username').value,
-                    password: document.getElementById('login_password').value
-                };
+                document.getElementById('main-nav').style.display = 'flex';
+                document.getElementById('login-error').style.display = 'none';
 
-                fetch('login.php', { 
-                    method: 'POST', 
-                    headers: { 'Content-Type': 'application/json' }, 
-                    body: JSON.stringify(payload) 
-                })
-                .then(res => res.text())
-                .then(text => {
-                    try {
-                        const data = JSON.parse(text);
-                        if (data.success) {
-                            csrf_token = data.csrf_token;
-                            current_role = data.user.role;
-                            
-                            document.getElementById('main-nav').style.display = 'flex';
-                            document.getElementById('login-error').style.display = 'none';
-
-                            if (current_role === 'Staff') {
-                                document.getElementById('nav-dash').style.display = 'none';
-                                showSection('rentals-section');
-                            } else {
-                                document.getElementById('nav-dash').style.display = 'inline-block';
-                                showSection('dashboard-section');
-                            }
-                        } else {
-                            const err = document.getElementById('login-error');
-                            err.innerText = data.error || 'Invalid credentials.';
-                            err.style.display = 'block';
-                        }
-                    } catch (err) {
-                        const errorBox = document.getElementById('login-error');
-                        errorBox.innerHTML = 'Server error or PHP output: <br><pre style="text-align:left; font-size:11px;">' + text + '</pre>';
-                        errorBox.style.display = 'block';
-                    }
-                })
-                .catch(fetchErr => {
-                    const err = document.getElementById('login-error');
-                    err.innerText = 'Network error occurred.';
-                    err.style.display = 'block';
-                });
-            });
-        }
+                if (current_role === 'Staff') {
+                    document.getElementById('nav-dash').style.display = 'none';
+                    showSection('rentals-section');
+                } else {
+                    document.getElementById('nav-dash').style.display = 'inline-block';
+                    showSection('dashboard-section');
+                }
+            } else {
+                const err = document.getElementById('login-error');
+                err.innerText = data.error || 'Invalid credentials.';
+                err.style.display = 'block';
+            }
+        });
     });
-    // Return Form Submission Handler
+
     document.getElementById('return-form').addEventListener('submit', function(e) {
         e.preventDefault();
         
         const contractId = document.getElementById('return_contract_id').value;
         if (!contractId) {
-            alert('Please select a contract first by clicking "Return All Items" on a row.');
+            alert('Please select a contract first.');
             return;
         }
 
@@ -344,130 +324,3 @@ error_reporting(E_ALL);
                 showSection('login-section');
             }
         });
-    }
-
-    // 1. Dashboard
-    function load_dashboard() {
-        fetch('dashboard.php')
-            .then(res => res.json())
-            .then(data => {
-                if (data.success) {
-                    const s = data.summary;
-                    document.getElementById('dash-total-items').innerText = s.inventory.total_items;
-                    document.getElementById('dash-available').innerText = s.inventory.available;
-                    document.getElementById('dash-rented').innerText = s.inventory.rented;
-                    
-                    document.getElementById('dash-active').innerText = s.contracts.active_on_time;
-                    document.getElementById('dash-overdue').innerText = s.contracts.overdue;
-                    
-                    document.getElementById('dash-deposits').innerText = s.financial.deposits_held.toFixed(2);
-                    document.getElementById('dash-late-fees').innerText = s.financial.late_fee_exposure.toFixed(2);
-
-                    document.getElementById('dash-completed-rentals').innerText = s.sales.completed_rentals;
-                    document.getElementById('dash-base-revenue').innerText = s.sales.base_rental_revenue.toFixed(2);
-                    document.getElementById('dash-late-collected').innerText = s.sales.late_fees_collected.toFixed(2);
-                    document.getElementById('dash-total-revenue').innerText = s.sales.total_revenue.toFixed(2);
-                    document.getElementById('dash-avg-sale').innerText = s.sales.average_sale_value.toFixed(2);
-                    document.getElementById('dash-top-item').innerText = s.sales.top_item
-                        ? s.sales.top_item + ' (' + s.sales.top_item_rentals + 'x)'
-                        : '—';
-                }
-            });
-    }
-
-    document.querySelector('#dashboard-section button').addEventListener('click', load_dashboard);
-
-    // 2. Customers
-    function search_customers() {
-        const term = document.getElementById('customer-search').value;
-        fetch('customers.php?search=' + encodeURIComponent(term))
-            .then(res => res.json())
-            .then(data => {
-                const tbody = document.getElementById('customers-tbody');
-                tbody.innerHTML = '';
-                if (data.success && data.results) {
-                    data.results.forEach((c, index) => {
-                        let row_num = index + 1;
-                        let actionBtns = current_role === 'Admin' 
-                            ? `<button onclick="edit_customer(${c.id})">Edit</button> <button onclick="delete_customer(${c.id})">Delete</button>`
-                            : `<button onclick="edit_customer(${c.id})">Edit</button>`;
-
-                        tbody.innerHTML += `<tr>
-                            <td>${row_num}</td>
-                            <td>${c.name}</td>
-                            <td>${c.id_number}</td>
-                            <td>${c.phone}</td>
-                            <td>${actionBtns}</td>
-                        </tr>`;
-                    });
-                }
-            });
-    }
-
-    function delete_customer(id) {
-        if (!confirm('Delete this customer? This cannot be undone.')) return;
-        fetch('customers.php?id=' + id, { 
-            method: 'DELETE',
-            headers: { 'X-CSRF-Token': csrf_token }
-        })
-        .then(res => res.json())
-        .then(data => { data.success ? search_customers() : alert(data.error || 'Delete failed.'); });
-    }
-    
-    function delete_inventory(id) {
-        if (!confirm('Delete this inventory item? This cannot be undone.')) return;
-        fetch('inventory.php?id=' + id, { 
-            method: 'DELETE',
-            headers: { 'X-CSRF-Token': csrf_token }
-        })
-        .then(res => res.json())
-        .then(data => { data.success ? load_inventory() : alert(data.error || 'Delete failed.'); });
-    }
-
-    // 2b. Inventory
-    function load_inventory() {
-        fetch('inventory.php')
-            .then(res => res.json())
-            .then(data => {
-                const tbody = document.getElementById('inventory-tbody');
-                tbody.innerHTML = '';
-                if (data.success && data.results) {
-                    data.results.forEach((i, index) => {
-                        let row_num = index + 1; 
-                        let actionBtns = current_role === 'Admin' 
-                            ? `<button onclick="edit_inventory(${i.id})">Edit</button> <button onclick="delete_inventory(${i.id})">Delete</button>`
-                            : `<button onclick="edit_inventory(${i.id})">Edit</button>`;
-
-                        tbody.innerHTML += `<tr>
-                            <td>${row_num}</td>
-                            <td>${i.item_name}</td>
-                            <td>${i.serial_number}</td>
-                            <td>₱${i.daily_rate}</td>
-                            <td>${i.status}</td>
-                            <td>${actionBtns}</td>
-                        </tr>`;
-                    });
-                }
-            });
-    }
-
-    document.getElementById('customer-form').addEventListener('submit', function(e) {
-        e.preventDefault();
-        const id = document.getElementById('customer_id').value;
-        const payload = {
-            name: document.getElementById('customer_name').value,
-            id_number: document.getElementById('customer_id_number').value,
-            phone: document.getElementById('customer_phone').value
-        };
-        const method = id ? 'PUT' : 'POST';
-        const url = id ? 'customers.php?id=' + id : 'customers.php';
-
-        fetch(url, { 
-            method: method, 
-            headers: { 
-                'Content-Type': 'application/json',
-                'X-CSRF-Token': csrf_token 
-            }, 
-            body: JSON.stringify(payload) 
-        })
-        .then(res => res.json())
