@@ -63,3 +63,4 @@ WM4Mid-main/
 
 ## Disclosure
 AI assistance was used for documentation drafting and small UI/error-handling additions (see `README_CHANGES.md`). All code is understood and can be explained and modified by the group.
+ 
